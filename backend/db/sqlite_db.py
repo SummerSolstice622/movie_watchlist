@@ -7,20 +7,19 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from dotenv import load_dotenv
+
 from .base import BaseMovieDB, MovieInfo
 
-# 获取项目根目录（backend的父目录）
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+# 加载项目根目录下的 .env 文件
+_PROJECT_ROOT = Path(__file__).parent.parent.parent
+load_dotenv(_PROJECT_ROOT / ".env")
 
-# 从环境变量获取数据库路径
-# 优先级：环境变量 > 绝对路径 > 相对于项目根目录
-db_path_env = os.getenv("DB_PATH")
-if db_path_env:
-    DB_PATH = db_path_env
-else:
-    # 使用绝对路径以确保无论从何处运行都能找到数据库
-    default_db = PROJECT_ROOT / "life_track.db"
-    DB_PATH = str(default_db.resolve())  # resolve() 确保是绝对路径
+# 从环境变量获取数据库路径，默认指向 ~/Downloads/heritage_journey/life_track.db
+DB_PATH = os.getenv(
+    "DB_PATH",
+    str(Path.home() / "Downloads" / "heritage_journey" / "life_track.db")
+)
 
 
 class _ConnectionWrapper:

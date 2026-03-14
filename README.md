@@ -1,6 +1,6 @@
 # Movie Tracker
 
-电影观看记录追踪，作为独立项目从 life_tracker 拆分。
+电影观看记录追踪。
 
 ## 目录结构
 

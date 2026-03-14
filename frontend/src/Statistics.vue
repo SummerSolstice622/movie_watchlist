@@ -49,7 +49,7 @@
 </template>
 
 <script>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import HeaderCard from './components/HeaderCard.vue'
 import { movieAPI } from './api.js'
@@ -77,24 +77,19 @@ export default {
 
     const initCharts = async () => {
       try {
-        // 加载历年统计（不受年份过滤影响）
-        const resYearly = await movieAPI.getStatisticsYearly()
+        const [resYearly, res] = await Promise.all([
+          movieAPI.getStatisticsYearly(),
+          movieAPI.getStatistics({ year: selectedYear.value })
+        ])
         if (resYearly.data.success) {
           yearlyStats.value = resYearly.data.data
-          // 等待DOM更新后再渲染
-          await new Promise(resolve => setTimeout(resolve, 50))
-          renderYearChart()
         }
-
-        // 加载其他统计（支持年份过滤）
-        const res = await movieAPI.getStatistics({ year: selectedYear.value })
         if (res.data.success) {
           filteredStats.value = res.data.data
-
-          // 重新渲染当前tab
-          await new Promise(resolve => setTimeout(resolve, 50))
-          renderCharts()
         }
+        await nextTick()
+        renderYearChart()
+        renderCharts()
       } catch (error) {
         console.error('获取统计数据失败:', error)
       }
@@ -114,13 +109,18 @@ export default {
       const chartDom = document.getElementById('yearChart')
       if (!chartDom) return
 
-      if (yearChartInstance) yearChartInstance.dispose()
-      yearChartInstance = echarts.init(chartDom)
-
       const data = yearlyStats.value || []
       const sortedData = [...data].sort((a, b) => parseInt(a.year) - parseInt(b.year))
       const years = sortedData.map(item => String(item.year))
       const counts = sortedData.map(item => item.count)
+
+      // 设置尺寸必须在 echarts.init() 之前
+      const containerWidth = Math.max(600, years.length * 40)
+      chartDom.style.width = containerWidth + 'px'
+      chartDom.style.height = '400px'
+
+      if (yearChartInstance) yearChartInstance.dispose()
+      yearChartInstance = echarts.init(chartDom)
 
       const option = {
         title: { show: false },
@@ -152,15 +152,16 @@ export default {
         }]
       }
 
-      const containerWidth = Math.max(600, years.length * 40)
-      chartDom.style.minWidth = containerWidth + 'px'
-      chartDom.style.minHeight = '400px'
       yearChartInstance.setOption(option)
+      yearChartInstance.resize()
     }
 
     const renderDecadeChart = () => {
       const chartDom = document.getElementById('decadeChart')
       if (!chartDom) return
+
+      chartDom.style.width = '100%'
+      chartDom.style.height = '400px'
 
       if (decadeChartInstance) decadeChartInstance.dispose()
       decadeChartInstance = echarts.init(chartDom)
@@ -191,14 +192,16 @@ export default {
         }]
       }
 
-      chartDom.style.minWidth = '600px'
-      chartDom.style.minHeight = '400px'
       decadeChartInstance.setOption(option)
+      decadeChartInstance.resize()
     }
 
     const renderRatingChart = () => {
       const chartDom = document.getElementById('ratingChart')
       if (!chartDom) return
+
+      chartDom.style.width = '100%'
+      chartDom.style.height = '400px'
 
       if (ratingChartInstance) ratingChartInstance.dispose()
       ratingChartInstance = echarts.init(chartDom)
@@ -229,26 +232,29 @@ export default {
         }]
       }
 
-      chartDom.style.minWidth = '600px'
-      chartDom.style.minHeight = '400px'
       ratingChartInstance.setOption(option)
+      ratingChartInstance.resize()
     }
 
     const renderGenreChart = () => {
       const chartDom = document.getElementById('genreChart')
       if (!chartDom) return
 
-      if (genreChartInstance) genreChartInstance.dispose()
-      genreChartInstance = echarts.init(chartDom)
-
       const data = filteredStats.value.by_genre || []
       const genres = data.map(item => item.genre)
       const counts = data.map(item => item.count)
 
+      const containerWidth = Math.max(800, genres.length * 60)
+      chartDom.style.width = containerWidth + 'px'
+      chartDom.style.height = '400px'
+
+      if (genreChartInstance) genreChartInstance.dispose()
+      genreChartInstance = echarts.init(chartDom)
+
       const option = {
         title: { show: false },
         tooltip: { trigger: 'axis' },
-        grid: { left: 100, right: 50, top: 20, bottom: 40, containLabel: false },
+        grid: { left: 60, right: 50, top: 20, bottom: 80, containLabel: true },
         xAxis: {
           type: 'category',
           data: genres,
@@ -269,10 +275,8 @@ export default {
         }]
       }
 
-      const containerWidth = Math.max(800, genres.length * 60)
-      chartDom.style.minWidth = containerWidth + 'px'
-      chartDom.style.minHeight = '400px'
       genreChartInstance.setOption(option)
+      genreChartInstance.resize()
     }
 
     const onYearChange = () => {}
@@ -287,12 +291,11 @@ export default {
 
     // 监听年份变化
     watch(selectedYear, async () => {
-      // 只加载其他统计数据，不重新加载历年统计数据
       try {
         const res = await movieAPI.getStatistics({ year: selectedYear.value })
         if (res.data.success) {
           filteredStats.value = res.data.data
-          await new Promise(resolve => setTimeout(resolve, 50))
+          await nextTick()
           renderCharts()
         }
       } catch (error) {
@@ -302,7 +305,7 @@ export default {
 
     // 监听tab切换，重新渲染图表
     watch(currentTab, async () => {
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await nextTick()
       renderCharts()
     })
 
@@ -364,6 +367,7 @@ export default {
 .chart-wrapper {
   padding: 20px 0;
   overflow-x: auto;
+  min-height: 400px;
 }
 
 :deep(.el-tabs__content) {
